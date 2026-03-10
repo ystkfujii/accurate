@@ -10,6 +10,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	fieldOwner client.FieldOwner = "kubectl-accurate"
+)
+
 func makeClient(config *genericclioptions.ConfigFlags) (client.Client, error) {
 	cfg, err := config.ToRESTConfig()
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -78,9 +79,13 @@ func (o *subMoveOpts) Run(ctx context.Context) error {
 		return nil
 	}
 
-	ns.Labels[constants.LabelParent] = o.parent
-	if err := o.client.Update(ctx, ns); err != nil {
-		return fmt.Errorf("failed to update namespace %s: %w", o.name, err)
+	// Use Server-Side Apply to update the namespace labels
+	ac := corev1ac.Namespace(o.name).
+		WithLabels(map[string]string{
+			constants.LabelParent: o.parent,
+		})
+	if err := o.client.Apply(ctx, ac, fieldOwner, client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to apply namespace %s: %w", o.name, err)
 	}
 
 	fmt.Fprintf(o.streams.Out, "the parent has changed to %s\n", o.parent)

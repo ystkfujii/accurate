@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -58,9 +59,11 @@ func (o *templateUnsetCmd) Run(ctx context.Context) error {
 		return nil
 	}
 
-	delete(ns.Labels, constants.LabelTemplate)
-	if err := o.client.Update(ctx, ns); err != nil {
-		return fmt.Errorf("failed to update namespace %s: %w", o.name, err)
+	// Use Server-Side Apply to update the namespace labels
+	// Apply with empty labels to remove the template label owned by this field manager
+	ac := corev1ac.Namespace(o.name)
+	if err := o.client.Apply(ctx, ac, fieldOwner, client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to apply namespace %s: %w", o.name, err)
 	}
 
 	fmt.Fprintf(o.streams.Out, "unset template for %s\n", o.name)

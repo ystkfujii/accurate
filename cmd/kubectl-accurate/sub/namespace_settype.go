@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -72,20 +73,26 @@ func (o *nsSetTypeOpts) Run(ctx context.Context) error {
 			fmt.Fprintln(o.streams.Out, "nothing to do")
 			return nil
 		}
-		delete(ns.Labels, constants.LabelType)
 	} else {
 		if current == o.typ {
 			fmt.Fprintln(o.streams.Out, "nothing to do")
 			return nil
 		}
-		if ns.Labels == nil {
-			ns.Labels = make(map[string]string)
-		}
-		ns.Labels[constants.LabelType] = o.typ
 	}
 
-	if err := o.client.Update(ctx, ns); err != nil {
-		return fmt.Errorf("failed to update namespace %s: %w", o.name, err)
+	// Use Server-Side Apply to update the namespace labels
+	var ac *corev1ac.NamespaceApplyConfiguration
+	if o.typ == "none" {
+		// When unsetting, apply with empty labels to remove the type label
+		ac = corev1ac.Namespace(o.name)
+	} else {
+		ac = corev1ac.Namespace(o.name).
+			WithLabels(map[string]string{
+				constants.LabelType: o.typ,
+			})
+	}
+	if err := o.client.Apply(ctx, ac, fieldOwner, client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to apply namespace %s: %w", o.name, err)
 	}
 
 	fmt.Fprintln(o.streams.Out, "success")

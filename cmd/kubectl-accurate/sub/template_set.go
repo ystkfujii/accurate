@@ -6,9 +6,9 @@ import (
 
 	"github.com/cybozu-go/accurate/pkg/constants"
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -53,17 +53,13 @@ func (o *templateSetOpts) Fill(streams genericiooptions.IOStreams, config *gener
 }
 
 func (o *templateSetOpts) Run(ctx context.Context) error {
-	ns := &corev1.Namespace{}
-	if err := o.client.Get(ctx, client.ObjectKey{Name: o.name}, ns); err != nil {
-		return fmt.Errorf("failed to get namespace %s: %w", o.name, err)
-	}
-
-	if ns.Labels == nil {
-		ns.Labels = make(map[string]string)
-	}
-	ns.Labels[constants.LabelTemplate] = o.template
-	if err := o.client.Update(ctx, ns); err != nil {
-		return fmt.Errorf("failed to update namespace %s: %w", o.name, err)
+	// Use Server-Side Apply to update the namespace labels
+	ac := corev1ac.Namespace(o.name).
+		WithLabels(map[string]string{
+			constants.LabelTemplate: o.template,
+		})
+	if err := o.client.Apply(ctx, ac, fieldOwner, client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to apply namespace %s: %w", o.name, err)
 	}
 
 	fmt.Fprintf(o.streams.Out, "set %s as a template of %s\n", o.template, o.name)
